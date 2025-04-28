@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ95L-8X9C0asoHEhh43alOrujfSpafjBJzX2Li-fxcnAmu9Ey4FHXwSJ3ibdzXLI7tKh8&usqp=CAU" alt="Logo Bullex API" width="600">
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ95L-8X9C0asoHEhh43alOrujfSpafjBJzX2Li-fxcnAmu9Ey4FHXwSJ3ibdzXLI7tKh8&usqp=CAU" alt="Logo Bullex API" width="200">
 </p>
 
 
