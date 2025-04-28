@@ -1,5 +1,11 @@
 # README - Documentação da API Bullex
 
+
+<p align="center">
+  <img src="[docs/img/banner.png](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ95L-8X9C0asoHEhh43alOrujfSpafjBJzX2Li-fxcnAmu9Ey4FHXwSJ3ibdzXLI7tKh8&usqp=CAU)" alt="Logo Bullex API" width="600">
+</p>
+
+
 Este arquivo contém a documentação dos métodos disponíveis na classe `Bullex` e exemplos de como utilizá-los.
 
 ## Classe Principal
