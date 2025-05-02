@@ -26,7 +26,7 @@ def nested_dict(n, type):
 class Bullex:
     __version__ = api_version
 
-    def __init__(self, email, password, active_account_type="PRACTICE"):
+    def __init__(self, email, password, active_account_type="PRACTICE", proxies=None):
         self.size = [1, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800,
                      3600, 7200, 14400, 28800, 43200, 86400, 604800, 2592000]
         self.email = email
@@ -781,7 +781,7 @@ class Bullex:
                     pass
             time.sleep(polling_time)
 
-        # Function by kkagill ( https://github.com/Lu-Yi-Hsun/BullexAPI/issues/196 | https://github.com/kkagill )
+        # Function by kkagill ( https://github.com/Lu-Yi-Hsun/bullexAPI/issues/196 | https://github.com/kkagill )
         # Function only work with Options!
 
     def check_win_v4(self, id_number):
@@ -1040,7 +1040,7 @@ class Bullex:
         return False
 
     # thank thiagottjv
-    # https://github.com/Lu-Yi-Hsun/BullexAPI/issues/65#issuecomment-513998357
+    # https://github.com/Lu-Yi-Hsun/bullexAPI/issues/65#issuecomment-513998357
 
     def buy_digital_spot(self, active, amount, action, duration):
         # Expiration time need to be formatted like this: YYYYMMDDHHII
@@ -1617,3 +1617,73 @@ class Bullex:
             return True, digital_order_id
         else:
             return False, digital_order_id
+
+    def buy_blitz(self, active, price, direction, expiration):
+        """Buy a blitz option.
+        
+        :param active: The asset name.
+        :param price: The amount to invest.
+        :param direction: The option direction ('call' or 'put').
+        :param expiration: The expiration time in seconds (typically 3, 5 or 10).
+        :returns: A tuple of (result, order_id).
+        """
+        self.api.buy_multi_option = {}
+        self.api.buy_successful = None
+        
+        request_id = str(randint(0, 10000))
+        try:
+            self.api.buy_multi_option[request_id]["id"] = None
+        except:
+            pass
+        
+        # Convert active name to active_id if needed
+        if isinstance(active, str):
+            active_id = OP_code.ACTIVES[active]
+        else:
+            active_id = active
+        
+        # Obtenha o payout automaticamente
+        profit_percent = self.get_blitz_payout(active)
+        
+        value = None
+        
+        self.api.buy_blitz_option(price, active_id, direction, expiration, profit_percent, value, request_id)
+        
+        start_t = time.time()
+        id = None
+        self.api.result = None
+        
+        while self.api.result == None or id == None:
+            try:
+                if "message" in self.api.buy_multi_option[request_id].keys():
+                    return False, self.api.buy_multi_option[request_id]["message"]
+            except:
+                pass
+            try:
+                id = self.api.buy_multi_option[request_id]["id"]
+            except:
+                pass
+            if time.time() - start_t >= 5:
+                logging.error('**warning** buy_blitz late 5 sec')
+                return False, None
+
+        return self.api.result, self.api.buy_multi_option[request_id]["id"]
+
+    def get_blitz_payout(self, active):
+        """
+        Retorna o payout (profit) atual do ativo para blitz.
+        """
+        try:
+            all_profit = self.get_all_profit()
+            # Tenta pegar o payout mais adequado (turbo, binary, etc)
+            if active in all_profit:
+                # Priorize turbo, depois binary, depois qualquer outro
+                for key in ["turbo", "binary"]:
+                    if key in all_profit[active]:
+                        return int(all_profit[active][key] * 100)
+                # Se não houver turbo/binary, pega o primeiro disponível
+                for v in all_profit[active].values():
+                    return int(v * 100)
+        except Exception as e:
+            logging.warning(f"Não foi possível obter payout para {active}: {e}")
+        return 85  # valor padrão se não conseguir

@@ -1,4 +1,4 @@
-"""Module for Bullex API."""
+"""Module for bullex API."""
 
 import time
 import json
@@ -60,6 +60,7 @@ from bullexapi.ws.chanels.sell_option import Sell_Option
 from bullexapi.ws.chanels.sell_digital_option import Sell_Digital_Option
 from bullexapi.ws.chanels.change_tpsl import Change_Tpsl
 from bullexapi.ws.chanels.change_auto_margin_call import ChangeAutoMarginCall
+from bullexapi.ws.chanels.buy_blitz_option import BuyBlitzOption
 
 from bullexapi.ws.objects.timesync import TimeSync
 from bullexapi.ws.objects.profile import Profile
@@ -84,7 +85,7 @@ requests.packages.urllib3.disable_warnings()  # pylint: disable=no-member
 
 
 class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
-    """Class for communication with Bullex API."""
+    """Class for communication with bullex API."""
 
     # pylint: disable=too-many-public-methods
     socket_option_opened = {}
@@ -156,9 +157,9 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, host, username, password, proxies=None):
         """
-        :param str host: The hostname or ip address of a Bullex server.
-        :param str username: The username of a Bullex server.
-        :param str password: The password of a Bullex server.
+        :param str host: The hostname or ip address of a bullex server.
+        :param str username: The username of a bullex server.
+        :param str password: The password of a bullex server.
         :param dict proxies: (optional) The http request proxies.
         """
         self.https_url = "https://{host}/api".format(host=host)
@@ -185,12 +186,12 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
         :param resource: The instance of
             :class:`Resource <bullexapi.http.resource.Resource>`.
 
-        :returns: The full url to Bullex http resource.
+        :returns: The full url to bullex http resource.
         """
         return "/".join((self.https_url, resource.url))
 
     def send_http_request(self, resource, method, data=None, params=None, headers=None):  # pylint: disable=too-many-arguments
-        """Send http request to Bullex server.
+        """Send http request to bullex server.
 
         :param resource: The instance of
             :class:`Resource <bullexapi.http.resource.Resource>`.
@@ -221,7 +222,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
         return response
 
     def send_http_request_v2(self, url, method, data=None, params=None, headers=None):  # pylint: disable=too-many-arguments
-        """Send http request to Bullex server.
+        """Send http request to bullex server.
 
         :param resource: The instance of
             :class:`Resource <bullexapi.http.resource.Resource>`.
@@ -260,7 +261,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
         return self.websocket_client.wss
 
     def send_websocket_request(self, name, msg, request_id="", no_force_send=True):
-        """Send websocket request to Bullex server.
+        """Send websocket request to bullex server.
 
         :param str name: The websocket request name.
         :param dict msg: The websocket request msg.
@@ -280,7 +281,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def logout(self):
-        """Property for get Bullex http login resource.
+        """Property for get bullex http login resource.
 
         :returns: The instance of :class:`Login
             <bullexapi.http.login.Login>`.
@@ -289,7 +290,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def login(self):
-        """Property for get Bullex http login resource.
+        """Property for get bullex http login resource.
 
         :returns: The instance of :class:`Login
             <bullexapi.http.login.Login>`.
@@ -298,7 +299,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def login_2fa(self):
-        """Property for get Bullex http login 2FA resource.
+        """Property for get bullex http login 2FA resource.
 
         :returns: The instance of :class:`Login2FA
             <bullexapi.http.login2fa.Login2FA>`.
@@ -307,7 +308,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def send_sms_code(self):
-        """Property for get Bullex http send sms code resource.
+        """Property for get bullex http send sms code resource.
 
         :returns: The instance of :class:`SMS_Sender
             <bullexapi.http.send_sms.SMS_Sender>`.
@@ -316,7 +317,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def verify_2fa(self):
-        """Property for get Bullex http verify 2fa resource.
+        """Property for get bullex http verify 2fa resource.
 
         :returns: The instance of :class:`Verify
             <bullexapi.http.verify.Verify>`.
@@ -325,7 +326,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def loginv2(self):
-        """Property for get Bullex http loginv2 resource.
+        """Property for get bullex http loginv2 resource.
 
         :returns: The instance of :class:`Loginv2
             <bullexapi.http.loginv2.Loginv2>`.
@@ -334,7 +335,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def auth(self):
-        """Property for get Bullex http auth resource.
+        """Property for get bullex http auth resource.
 
         :returns: The instance of :class:`Auth
             <bullexapi.http.auth.Auth>`.
@@ -343,7 +344,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def appinit(self):
-        """Property for get Bullex http appinit resource.
+        """Property for get bullex http appinit resource.
 
         :returns: The instance of :class:`Appinit
             <bullexapi.http.appinit.Appinit>`.
@@ -352,7 +353,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def token(self):
-        """Property for get Bullex http token resource.
+        """Property for get bullex http token resource.
 
         :returns: The instance of :class:`Token
             <bullexapi.http.auth.Token>`.
@@ -361,7 +362,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     # @property
     # def profile(self):
-    #     """Property for get Bullex http profile resource.
+    #     """Property for get bullex http profile resource.
 
     #     :returns: The instance of :class:`Profile
     #         <bullexapi.http.profile.Profile>`.
@@ -376,7 +377,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def changebalance(self):
-        """Property for get Bullex http changebalance resource.
+        """Property for get bullex http changebalance resource.
 
         :returns: The instance of :class:`Changebalance
             <bullexapi.http.changebalance.Changebalance>`.
@@ -389,7 +390,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def billing(self):
-        """Property for get Bullex http billing resource.
+        """Property for get bullex http billing resource.
 
         :returns: The instance of :class:`Billing
             <bullexapi.http.billing.Billing>`.
@@ -398,7 +399,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def buyback(self):
-        """Property for get Bullex http buyback resource.
+        """Property for get bullex http buyback resource.
 
         :returns: The instance of :class:`Buyback
             <bullexapi.http.buyback.Buyback>`.
@@ -408,7 +409,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def getprofile(self):
-        """Property for get Bullex http getprofile resource.
+        """Property for get bullex http getprofile resource.
 
         :returns: The instance of :class:`Login
             <bullexapi.http.getprofile.Getprofile>`.
@@ -418,7 +419,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def get_balances(self):
-        """Property for get Bullex http getprofile resource.
+        """Property for get bullex http getprofile resource.
 
         :returns: The instance of :class:`Login
             <bullexapi.http.getprofile.Getprofile>`.
@@ -436,7 +437,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def ssid(self):
-        """Property for get Bullex websocket ssid chanel.
+        """Property for get bullex websocket ssid chanel.
 
         :returns: The instance of :class:`Ssid
             <bullexapi.ws.chanels.ssid.Ssid>`.
@@ -475,7 +476,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
     @property
     def subscribe(self):
         "candle-generated"
-        """Property for get Bullex websocket subscribe chanel.
+        """Property for get bullex websocket subscribe chanel.
 
         :returns: The instance of :class:`Subscribe
             <bullexapi.ws.chanels.subscribe.Subscribe>`.
@@ -488,7 +489,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def unsubscribe(self):
-        """Property for get Bullex websocket unsubscribe chanel.
+        """Property for get bullex websocket unsubscribe chanel.
 
         :returns: The instance of :class:`Unsubscribe
             <bullexapi.ws.chanels.unsubscribe.Unsubscribe>`.
@@ -600,7 +601,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def setactives(self):
-        """Property for get Bullex websocket setactives chanel.
+        """Property for get bullex websocket setactives chanel.
 
         :returns: The instance of :class:`SetActives
             <bullexapi.ws.chanels.setactives.SetActives>`.
@@ -613,7 +614,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def getcandles(self):
-        """Property for get Bullex websocket candles chanel.
+        """Property for get bullex websocket candles chanel.
 
         :returns: The instance of :class:`GetCandles
             <bullexapi.ws.chanels.candles.GetCandles>`.
@@ -656,7 +657,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def buy(self):
-        """Property for get Bullex websocket buyv2 request.
+        """Property for get bullex websocket buyv2 request.
 
         :returns: The instance of :class:`Buyv2
             <bullexapi.ws.chanels.buyv2.Buyv2>`.
@@ -671,6 +672,16 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
     @property
     def sell_digital_option(self):
         return Sell_Digital_Option(self)
+
+    @property
+    def buy_blitz_option(self):
+        """Property for get bullex websocket buy blitz option chanel.
+
+        :returns: The instance of :class:`BuyBlitzOption
+            <bullexapi.ws.chanels.buy_blitz_option.BuyBlitzOption>`.
+        """
+        return BuyBlitzOption(self)
+
 # ____________________for_______digital____________________
 
     def get_digital_underlying(self):
@@ -834,7 +845,7 @@ class BullexAPI(object):  # pylint: disable=too-many-instance-attributes
 
         global_value.ssl_Mutual_exclusion = False
         global_value.ssl_Mutual_exclusion_write = False
-        """Method for connection to Bullex API."""
+        """Method for connection to bullex API."""
         try:
             self.close()
         except:
