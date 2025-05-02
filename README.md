@@ -176,10 +176,20 @@ for candle in candles:
 - **`logout()`**  
   Encerra a sessão.
 
+- **`buy_blitz(active, price, direction, expiration)`**  
+  Executa uma operação Blitz.
+  - `active`: Nome do ativo (ex: `"GBPCAD-OTC"`).
+  - `price`: Valor da operação.
+  - `direction`: Direção (`"call"` ou `"put"`).
+  - `expiration`: Tempo de expiração em segundos (ex: `3`, `5`, `10`).
+
 #### Exemplo:
 ```python
-payout = api.get_digital_payout("EURUSD")
-print("Payout:", payout)
+resultado, id_ordem = api.buy_blitz("GBPCAD-OTC", 1, "call", 5)
+if resultado:
+    print("Ordem Blitz executada com sucesso! ID:", id_ordem)
+else:
+    print("Erro ao executar Blitz.")
 ```
 
 ---
