@@ -1152,6 +1152,8 @@ class Bullex:
         self.api.buy_successful = None
         if ACTIVES not in OP_code.ACTIVES:
             self.get_ALL_Binary_ACTIVES_OPCODE()
+        exp_sent, idx_sent = get_expiration_time(
+            self.api.timesync.server_timestamp, int(expirations))
         req_id = str(randint(0, 10000))
         try:
             self.api.buy_multi_option[req_id]["id"] = None
@@ -1166,6 +1168,11 @@ class Bullex:
             try:
                 if "message" in self.api.buy_multi_option[req_id].keys():
                     msg_err = self.api.buy_multi_option[req_id]["message"]
+                    if "purchasing options is over" in str(msg_err).lower():
+                        opt_type = "turbo" if idx_sent < 5 else "binary"
+                        return self.buy_by_raw_expirations(
+                            float(price), ACTIVES, str(ACTION), opt_type, int(exp_sent) + 60
+                        )
                     if "not available" in str(msg_err).lower():
                         # Fallback automático para corretoras onde Turbo (1m-5m) roda via Blitz (60s-300s) ou Digital
                         exp_sec = int(expirations) * 60 if int(expirations) <= 5 else 60
