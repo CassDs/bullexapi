@@ -85,7 +85,6 @@ class Bullex:
             pass
             # logging.error('**warning** self.api.close() fail')
 
-        # Update the host - Try different endpoint format
         self.api = BullexAPI(
             "ws.trade.bull-ex.com", self.email, self.password)
         check = None
@@ -109,7 +108,7 @@ class Bullex:
 
             # ---------for async get name: "position-changed", microserviceName
             while global_value.balance_id == None:
-                pass
+                time.sleep(0.002)
 
             self.position_change_all(
                 "subscribeMessage", global_value.balance_id)
@@ -140,26 +139,18 @@ class Bullex:
             # self.get_balance_id()
             return True, None
         else:
-            try:
-                if reason and isinstance(reason, str) and reason.strip() != "":
-                    reason_json = json.loads(reason)
-                    if 'code' in reason_json and reason_json['code'] == 'verify':
-                        response = self.api.send_sms_code(reason_json['token'])
-                        
-                        if response.json()['code'] != 'success':
-                            return False, response.json()['message']
-                        
-                        # token_sms
-                        self.resp_sms = response
-                        return False, "2FA"
-            except json.JSONDecodeError:
-                logging.error(f"Failed to decode JSON: {reason}")
-                return False, f"Falha na conexão: {reason}"
-            except Exception as e:
-                logging.error(f"Error in connect: {e}")
-                return False, f"Erro na conexão: {e}"
-                
+            if json.loads(reason)['code'] == 'verify':
+                response = self.api.send_sms_code(json.loads(reason)['token'])
+
+                if response.json()['code'] != 'success':
+                    return False, response.json()['message']
+
+                # token_sms
+                self.resp_sms = response
+                return False, "2FA"
             return False, reason
+
+    # self.update_ACTIVES_OPCODE()
 
     def connect_2fa(self, sms_code):
         return self.connect(sms_code=sms_code)
@@ -179,6 +170,14 @@ class Bullex:
         return OP_code.ACTIVES
 
     def update_ACTIVES_OPCODE(self):
+        self.instruments_input_all_in_ACTIVES()
+        self.get_ALL_Binary_ACTIVES_OPCODE()
+        dicc = {}
+        for lis in sorted(OP_code.ACTIVES.items(), key=operator.itemgetter(1)):
+            dicc[lis[0]] = lis[1]
+        OP_code.ACTIVES = dicc
+
+    def _legacy_update_ACTIVES_OPCODE(self):
         # update from binary option
         self.get_ALL_Binary_ACTIVES_OPCODE()
         # crypto /dorex/cfd
@@ -199,7 +198,7 @@ class Bullex:
         self.api.financial_information = None
         self.api.get_financial_information(activeId)
         while self.api.financial_information == None:
-            pass
+            time.sleep(0.002)
         return self.api.financial_information
 
     def get_leader_board(self, country, from_position, to_position, near_traders_count, user_country_id=0, near_traders_country_count=0, top_country_count=0, top_count=0, top_type=2):
@@ -210,10 +209,33 @@ class Bullex:
                                   near_traders_country_count, near_traders_count, top_country_count, top_count, top_type)
 
         while self.api.leaderboard_deals_client == None:
-            pass
+            time.sleep(0.002)
         return self.api.leaderboard_deals_client
 
-    def get_instruments(self, type):
+    def get_instruments(self, type, force_refresh=False):
+        cache_attr = "_instruments_cache"
+        if not hasattr(self, cache_attr):
+            self._instruments_cache = {}
+        now = time.time()
+        if not force_refresh and type in self._instruments_cache:
+            cached_ts, cached_val = self._instruments_cache[type]
+            if now - cached_ts < 60 and cached_val is not None:
+                self.api.instruments = cached_val
+                return cached_val
+        self.api.instruments = None
+        while self.api.instruments is None:
+            try:
+                self.api.get_instruments(type)
+                start = time.time()
+                while self.api.instruments is None and time.time() - start < 10:
+                    time.sleep(0.005)
+            except Exception:
+                logging.error('**error** api.get_instruments need reconnect')
+                self.connect()
+        self._instruments_cache[type] = (time.time(), self.api.instruments)
+        return self.api.instruments
+
+    def _legacy_get_instruments(self, type):
         # type="crypto"/"forex"/"cfd"
         time.sleep(self.suspend)
         self.api.instruments = None
@@ -222,7 +244,7 @@ class Bullex:
                 self.api.get_instruments(type)
                 start = time.time()
                 while self.api.instruments == None and time.time() - start < 10:
-                    pass
+                    time.sleep(0.002)
             except:
                 logging.error('**error** api.get_instruments need reconnect')
                 self.connect()
@@ -239,6 +261,40 @@ class Bullex:
         self.instruments_input_to_ACTIVES("cfd")
 
     def get_ALL_Binary_ACTIVES_OPCODE(self):
+        init_info = self.get_all_init_v2()
+        if init_info:
+            for dirr in ("binary", "turbo", "blitz"):
+                if dirr in init_info and "actives" in init_info[dirr]:
+                    for i, act in init_info[dirr]["actives"].items():
+                        name = str(act.get("name", i)).split(".", 1)[-1]
+                        aid = int(i)
+                        OP_code.ACTIVES[name] = aid
+                        if name.endswith("-op"):
+                            OP_code.ACTIVES[name[:-3]] = aid
+        digital_data = (self.get_digital_underlying_list_data() or {}).get("underlying", [])
+        for digital in digital_data:
+            name = digital.get("underlying", "")
+            aid = digital.get("active_id")
+            if name and aid:
+                OP_code.ACTIVES[name] = int(aid)
+                if name.endswith("-op"):
+                    OP_code.ACTIVES[name[:-3]] = int(aid)
+        for k, v in list(OP_code.ACTIVES.items()):
+            if k.endswith("-op"):
+                OP_code.ACTIVES[k[:-3]] = v
+        return OP_code.ACTIVES
+
+    def _old_get_ALL_Binary_ACTIVES_OPCODE(self):
+        init_info = self.get_all_init_v2()
+        if init_info:
+            for dirr in ("binary", "turbo", "blitz"):
+                if dirr in init_info and "actives" in init_info[dirr]:
+                    for i, act in init_info[dirr]["actives"].items():
+                        name = str(act.get("name", i)).split(".", 1)[-1]
+                        OP_code.ACTIVES[name] = int(i)
+        return OP_code.ACTIVES
+
+    def _legacy_get_ALL_Binary_ACTIVES_OPCODE(self):
         init_info = self.get_all_init()
         for dirr in (["binary", "turbo"]):
             for i in init_info["result"][dirr]["actives"]:
@@ -247,6 +303,12 @@ class Bullex:
 
     # _________________________self.api.get_api_option_init_all() wss______________________
     def get_all_init(self):
+        v2 = self.get_all_init_v2()
+        if v2 is not None:
+            return {"isSuccessful": True, "result": v2}
+        return None
+
+    def _legacy_get_all_init(self):
 
         while True:
             self.api.api_option_init_all_result = None
@@ -274,7 +336,31 @@ class Bullex:
             except:
                 pass
 
-    def get_all_init_v2(self):
+    def get_all_init_v2(self, force_refresh=False):
+        now = time.time()
+        if (
+            not force_refresh
+            and getattr(self, "_init_v2_cache_ts", 0) > 0
+            and (now - self._init_v2_cache_ts) < 60
+            and self.api.api_option_init_all_result_v2
+        ):
+            return self.api.api_option_init_all_result_v2
+
+        self.api.api_option_init_all_result_v2 = None
+        if self.check_connect() is False:
+            self.connect()
+
+        self.api.get_api_option_init_all_v2()
+        start_t = time.time()
+        while self.api.api_option_init_all_result_v2 is None:
+            if time.time() - start_t >= 30:
+                logging.error('**warning** get_all_init_v2 late 30 sec')
+                return None
+            time.sleep(0.005)
+        self._init_v2_cache_ts = time.time()
+        return self.api.api_option_init_all_result_v2
+
+    def _legacy_get_all_init_v2(self):
         self.api.api_option_init_all_result_v2 = None
 
         if self.check_connect() == False:
@@ -293,6 +379,31 @@ class Bullex:
     # ------- chek if binary/digit/cfd/stock... if open or not
 
     def __get_binary_open(self):
+        binary_data = self.get_all_init_v2()
+        now_ts = self.get_server_timestamp()
+        if binary_data:
+            for option in ("binary", "turbo", "blitz"):
+                if option in binary_data and "actives" in binary_data[option]:
+                    for actives_id, active in binary_data[option]["actives"].items():
+                        name = str(active.get("name", actives_id)).split(".", 1)[-1]
+                        enabled = bool(active.get("enabled")) and not bool(active.get("is_suspended"))
+                        sched = active.get("schedule")
+                        if enabled and isinstance(sched, list) and sched:
+                            in_sched = any(
+                                (isinstance(s, (list, tuple)) and len(s) >= 2 and s[0] <= now_ts <= s[1])
+                                or (isinstance(s, dict) and s.get("open", 0) <= now_ts <= s.get("close", 0))
+                                for s in sched
+                            )
+                            enabled = in_sched
+                        self.OPEN_TIME[option][name]["open"] = enabled
+                        if name.endswith("-op"):
+                            self.OPEN_TIME[option][name[:-3]]["open"] = enabled
+            if not self.OPEN_TIME.get("turbo") and "blitz" in self.OPEN_TIME:
+                for k, v in self.OPEN_TIME["blitz"].items():
+                    self.OPEN_TIME["turbo"][k]["open"] = v.get("open", False)
+        return
+
+    def _legacy_get_binary_open(self):
         # for turbo and binary pairs
         binary_data = self.get_all_init_v2()
         binary_list = ["binary", "turbo"]
@@ -311,6 +422,32 @@ class Bullex:
                             self.OPEN_TIME[option][name]["open"] = active["enabled"]    
 
     def __get_digital_open(self):
+        digital_data = (self.get_digital_underlying_list_data() or {}).get("underlying", [])
+        now_ts = self.get_server_timestamp()
+        for digital in digital_data:
+            name = digital["underlying"]
+            if digital.get("active_id"):
+                OP_code.ACTIVES[name] = int(digital["active_id"])
+                if name.endswith("-op"):
+                    OP_code.ACTIVES[name[:-3]] = int(digital["active_id"])
+            if digital.get("is_suspended"):
+                self.OPEN_TIME["digital"][name]["open"] = False
+                if name.endswith("-op"):
+                    self.OPEN_TIME["digital"][name[:-3]]["open"] = False
+                continue
+            schedule = digital.get("schedule") or []
+            is_open = any(
+                s.get("open", 0) <= now_ts <= s.get("close", 0) for s in schedule
+            )
+            self.OPEN_TIME["digital"][name]["open"] = is_open
+            if name.endswith("-op"):
+                self.OPEN_TIME["digital"][name[:-3]]["open"] = is_open
+        return
+
+    def _old_get_digital_open(self):
+        return
+
+    def _legacy_get_digital_open(self):
         # for digital options
         digital_data = self.get_digital_underlying_list_data()["underlying"]
         for digital in digital_data:
@@ -324,6 +461,21 @@ class Bullex:
                     self.OPEN_TIME["digital"][name]["open"] = True
 
     def __get_other_open(self):
+        now_ts = self.get_server_timestamp()
+        for instruments_type in ("cfd", "forex", "crypto"):
+            ins_data = (self.get_instruments(instruments_type) or {}).get("instruments", [])
+            for detail in ins_data:
+                name = detail["name"]
+                if detail.get("is_suspended"):
+                    self.OPEN_TIME[instruments_type][name]["open"] = False
+                    continue
+                schedule = detail.get("schedule") or []
+                self.OPEN_TIME[instruments_type][name]["open"] = any(
+                    s.get("open", 0) <= now_ts <= s.get("close", 0) for s in schedule
+                )
+        return
+
+    def _legacy_get_other_open(self):
         # Crypto and etc pairs
         instrument_list = ["cfd", "forex", "crypto"]
         for instruments_type in instrument_list:
@@ -354,6 +506,23 @@ class Bullex:
 
     def get_binary_option_detail(self):
         detail = nested_dict(2, dict)
+        init_info = self.get_all_init_v2()
+        if init_info:
+            for opt_type in ("turbo", "binary", "blitz"):
+                if opt_type in init_info and "actives" in init_info[opt_type]:
+                    for _, act in init_info[opt_type]["actives"].items():
+                        name = str(act.get("name", "")).split(".", 1)[-1]
+                        detail[name][opt_type] = act
+                        if name.endswith("-op"):
+                            detail[name[:-3]][opt_type] = act
+            if not any("turbo" in v for v in detail.values()):
+                for name, v in list(detail.items()):
+                    if "blitz" in v:
+                        detail[name]["turbo"] = v["blitz"]
+        return detail
+
+    def _legacy_get_binary_option_detail(self):
+        detail = nested_dict(2, dict)
         init_info = self.get_all_init()
         for actives in init_info["result"]["turbo"]["actives"]:
             name = init_info["result"]["turbo"]["actives"][actives]["name"]
@@ -367,6 +536,29 @@ class Bullex:
         return detail
 
     def get_all_profit(self):
+        all_profit = nested_dict(2, dict)
+        init_info = self.get_all_init_v2()
+        if init_info:
+            for opt_type in ("turbo", "binary", "blitz"):
+                if opt_type in init_info and "actives" in init_info[opt_type]:
+                    for _, act in init_info[opt_type]["actives"].items():
+                        try:
+                            name = str(act.get("name", "")).split(".", 1)[-1]
+                            comm = act["option"]["profit"]["commission"]
+                            if comm is not None and comm < 100:
+                                val_p = (100.0 - float(comm)) / 100.0
+                                all_profit[name][opt_type] = val_p
+                                if name.endswith("-op"):
+                                    all_profit[name[:-3]][opt_type] = val_p
+                        except Exception:
+                            pass
+            if not any("turbo" in v for v in all_profit.values()):
+                for name, v in list(all_profit.items()):
+                    if "blitz" in v:
+                        all_profit[name]["turbo"] = v["blitz"]
+        return all_profit
+
+    def _legacy_get_all_profit(self):
         all_profit = nested_dict(2, dict)
         init_info = self.get_all_init()
         for actives in init_info["result"]["turbo"]["actives"]:
@@ -392,7 +584,7 @@ class Bullex:
 
     def get_profile_ansyc(self):
         while self.api.profile.msg == None:
-            pass
+            time.sleep(0.002)
         return self.api.profile.msg
 
     """def get_profile(self):
@@ -441,7 +633,7 @@ class Bullex:
         self.api.balances_raw = None
         self.api.get_balances()
         while self.api.balances_raw == None:
-            pass
+            time.sleep(0.002)
         return self.api.balances_raw
 
     def get_balance_mode(self):
@@ -461,7 +653,7 @@ class Bullex:
         self.api.training_balance_reset_request = None
         self.api.reset_training_balance()
         while self.api.training_balance_reset_request == None:
-            pass
+            time.sleep(0.002)
         return self.api.training_balance_reset_request
 
     def position_change_all(self, Main_Name, user_balance_id):
@@ -480,7 +672,9 @@ class Bullex:
 
     def change_balance(self, Balance_MODE):
         def set_id(b_id):
-            if global_value.balance_id != None:
+            if global_value.balance_id == b_id:
+                return
+            if global_value.balance_id is not None:
                 self.position_change_all(
                     "unsubscribeMessage", global_value.balance_id)
 
@@ -528,7 +722,7 @@ class Bullex:
                 self.api.getcandles(
                     OP_code.ACTIVES[ACTIVES], interval, count, endtime)
                 while self.check_connect and self.api.candles.candles_data == None:
-                    pass
+                    time.sleep(0.002)
                 if self.api.candles.candles_data != None:
                     break
             except:
@@ -627,6 +821,15 @@ class Bullex:
             time.sleep(1)
 
     def stop_candles_one_stream(self, ACTIVE, size):
+        key = ACTIVE + "," + str(size)
+        if key in self.subscribe_candle:
+            self.subscribe_candle.remove(key)
+        self.api.unsubscribe(OP_code.ACTIVES[ACTIVE], size)
+        time.sleep(0.3)
+        self.api.candle_generated_check[str(ACTIVE)][int(size)] = {}
+        return True
+
+    def _legacy_stop_candles_one_stream(self, ACTIVE, size):
         if ((ACTIVE + "," + str(size)) in self.subscribe_candle) == True:
             self.subscribe_candle.remove(ACTIVE + "," + str(size))
         while True:
@@ -665,6 +868,14 @@ class Bullex:
             time.sleep(1)
 
     def stop_candles_all_size_stream(self, ACTIVE):
+        if str(ACTIVE) in self.subscribe_candle_all_size:
+            self.subscribe_candle_all_size.remove(str(ACTIVE))
+        self.api.unsubscribe_all_size(OP_code.ACTIVES[ACTIVE])
+        time.sleep(0.3)
+        self.api.candle_generated_all_size_check[str(ACTIVE)] = {}
+        return True
+
+    def _legacy_stop_candles_all_size_stream(self, ACTIVE):
         if (str(ACTIVE) in self.subscribe_candle_all_size) == True:
             self.subscribe_candle_all_size.remove(str(ACTIVE))
         while True:
@@ -708,7 +919,20 @@ class Bullex:
     # -----------------traders_mood----------------------
 
     def start_mood_stream(self, ACTIVES, instrument="turbo-option"):
-        if ACTIVES in self.subscribe_mood == False:
+        if ACTIVES not in self.subscribe_mood:
+            self.subscribe_mood.append(ACTIVES)
+        active_id = OP_code.ACTIVES[ACTIVES]
+        self.api.subscribe_Traders_mood(active_id, instrument)
+        start_t = time.time()
+        while active_id not in self.api.traders_mood:
+            if time.time() - start_t > 4.0:
+                self.api.traders_mood[active_id] = 0.5
+                break
+            time.sleep(0.1)
+        return self.api.traders_mood[active_id]
+
+    def _legacy_start_mood_stream(self, ACTIVES, instrument="turbo-option"):
+        if ACTIVES not in self.subscribe_mood:
             self.subscribe_mood.append(ACTIVES)
 
         while True:
@@ -721,7 +945,9 @@ class Bullex:
                 time.sleep(5)
 
     def stop_mood_stream(self, ACTIVES, instrument="turbo-option"):
-        if ACTIVES in self.subscribe_mood == True:
+        if ACTIVES in self.subscribe_mood:
+            self.subscribe_mood.remove(ACTIVES)
+        if False:
             del self.subscribe_mood[ACTIVES]
         self.api.unsubscribe_Traders_mood(OP_code.ACTIVES[ACTIVES], instrument)
 
@@ -741,7 +967,7 @@ class Bullex:
         request_id = self.api.get_Technical_indicators(
             OP_code.ACTIVES[ACTIVES])
         while self.api.technical_indicators.get(request_id) == None:
-            pass
+            time.sleep(0.002)
         return self.api.technical_indicators[request_id]
 
 ##############################################################################################
@@ -751,7 +977,7 @@ class Bullex:
 
     def check_binary_order(self, order_id):
         while order_id not in self.api.order_binary:
-            pass
+            time.sleep(0.002)
         your_order = self.api.order_binary[order_id]
         del self.api.order_binary[order_id]
         return your_order
@@ -781,7 +1007,7 @@ class Bullex:
                     pass
             time.sleep(polling_time)
 
-        # Function by kkagill ( https://github.com/Lu-Yi-Hsun/bullexAPI/issues/196 | https://github.com/kkagill )
+        # Function by kkagill ( https://github.com/Lu-Yi-Hsun/bullexapi/issues/196 | https://github.com/kkagill )
         # Function only work with Options!
 
     def check_win_v4(self, id_number):
@@ -795,6 +1021,19 @@ class Bullex:
         return x['msg']['win'], (0 if x['msg']['win'] == 'equal' else float(x['msg']['sum']) * -1 if x['msg']['win'] == 'loose' else float(x['msg']['win_amount']) - float(x['msg']['sum']))
 
     def check_win_v3(self, id_number):
+        while True:
+            result = self.get_optioninfo_v2(20)
+            closed_list = result.get("msg", {}).get("closed_options", []) if isinstance(result, dict) else []
+            for opt in closed_list:
+                opt_id = opt.get("id")
+                matched = (opt_id == id_number) or (isinstance(opt_id, list) and id_number in opt_id)
+                if matched and opt_id is not None:
+                    win_state = opt.get("win")
+                    pnl = (float(opt.get("win_amount", 0)) - float(opt.get("amount", 0))) if win_state != "equal" else 0.0
+                    return win_state, pnl
+            time.sleep(1)
+
+    def _legacy_check_win_v3(self, id_number):
         while True:
             result = self.get_optioninfo_v2(10)
             if result['msg']['closed_options'][0]['id'][0] == id_number and result['msg']['closed_options'][0]['id'][0] != None:
@@ -832,7 +1071,7 @@ class Bullex:
         self.api.api_game_getoptions_result = None
         self.api.get_options(limit)
         while self.api.api_game_getoptions_result == None:
-            pass
+            time.sleep(0.002)
 
         return self.api.api_game_getoptions_result
 
@@ -840,7 +1079,7 @@ class Bullex:
         self.api.get_options_v2_data = None
         self.api.get_options_v2(limit, "binary,turbo")
         while self.api.get_options_v2_data == None:
-            pass
+            time.sleep(0.002)
 
         return self.api.get_options_v2_data
 
@@ -856,7 +1095,7 @@ class Bullex:
                 self.api.buyv3(
                     price[idx], OP_code.ACTIVES[ACTIVES[idx]], ACTION[idx], expirations[idx], idx)
             while len(self.api.buy_multi_option) < buy_len:
-                pass
+                time.sleep(0.002)
             buy_id = []
             for key in sorted(self.api.buy_multi_option.keys()):
                 try:
@@ -911,30 +1150,45 @@ class Bullex:
     def buy(self, price, ACTIVES, ACTION, expirations):
         self.api.buy_multi_option = {}
         self.api.buy_successful = None
-        # req_id = "buy"
+        if ACTIVES not in OP_code.ACTIVES:
+            self.get_ALL_Binary_ACTIVES_OPCODE()
         req_id = str(randint(0, 10000))
         try:
             self.api.buy_multi_option[req_id]["id"] = None
-        except:
+        except Exception:
             pass
         self.api.buyv3(
             float(price), OP_code.ACTIVES[ACTIVES], str(ACTION), int(expirations), req_id)
         start_t = time.time()
         id = None
         self.api.result = None
-        while self.api.result == None or id == None:
+        while self.api.result is None or id is None:
             try:
                 if "message" in self.api.buy_multi_option[req_id].keys():
-                    return False, self.api.buy_multi_option[req_id]["message"]
-            except:
+                    msg_err = self.api.buy_multi_option[req_id]["message"]
+                    if "not available" in str(msg_err).lower():
+                        # Fallback automático para corretoras onde Turbo (1m-5m) roda via Blitz (60s-300s) ou Digital
+                        exp_sec = int(expirations) * 60 if int(expirations) <= 5 else 60
+                        ok_b, id_b = self.buy_blitz(ACTIVES, price, ACTION, exp_sec)
+                        if ok_b:
+                            return ok_b, id_b
+                        ok_b30, id_b30 = self.buy_blitz(ACTIVES, price, ACTION, 30)
+                        if ok_b30:
+                            return ok_b30, id_b30
+                        ok_d, id_d = self.buy_digital_spot_v2(ACTIVES, price, ACTION, int(expirations) if int(expirations) in (1, 5, 15) else 1)
+                        if ok_d:
+                            return ok_d, id_d
+                    return False, msg_err
+            except Exception:
                 pass
             try:
                 id = self.api.buy_multi_option[req_id]["id"]
-            except:
+            except Exception:
                 pass
             if time.time() - start_t >= 5:
                 logging.error('**warning** buy late 5 sec')
                 return False, None
+            time.sleep(0.005)
 
         return self.api.result, self.api.buy_multi_option[req_id]["id"]
 
@@ -942,18 +1196,38 @@ class Bullex:
         self.api.sell_option(options_ids)
         self.api.sold_options_respond = None
         while self.api.sold_options_respond == None:
-            pass
+            time.sleep(0.002)
         return self.api.sold_options_respond
 
     def sell_digital_option(self, options_ids):
         self.api.sell_digital_option(options_ids)
         self.api.sold_digital_options_respond = None
         while self.api.sold_digital_options_respond == None:
-            pass
+            time.sleep(0.002)
         return self.api.sold_digital_options_respond
 # __________________for Digital___________________
 
-    def get_digital_underlying_list_data(self):
+    def get_digital_underlying_list_data(self, force_refresh=False):
+        now = time.time()
+        if (
+            not force_refresh
+            and getattr(self, "_digital_und_cache_ts", 0) > 0
+            and (now - self._digital_und_cache_ts) < 60
+            and self.api.underlying_list_data is not None
+        ):
+            return self.api.underlying_list_data
+        self.api.underlying_list_data = None
+        self.api.get_digital_underlying()
+        start_t = time.time()
+        while self.api.underlying_list_data is None:
+            if time.time() - start_t >= 30:
+                logging.error('**warning** get_digital_underlying_list_data late 30 sec')
+                return None
+            time.sleep(0.005)
+        self._digital_und_cache_ts = time.time()
+        return self.api.underlying_list_data
+
+    def _legacy_get_digital_underlying_list_data(self):
         self.api.underlying_list_data = None
         self.api.get_digital_underlying()
         start_t = time.time()
@@ -970,7 +1244,7 @@ class Bullex:
         self.api.get_strike_list(ACTIVES, duration)
         ans = {}
         while self.api.strike_list == None:
-            pass
+            time.sleep(0.002)
         try:
             for data in self.api.strike_list["msg"]["strike"]:
                 temp = {}
@@ -993,7 +1267,7 @@ class Bullex:
 
     def get_instrument_quites_generated_data(self, ACTIVE, duration):
         while self.api.instrument_quotes_generated_raw_data[ACTIVE][duration * 60] == {}:
-            pass
+            time.sleep(0.002)
         return self.api.instrument_quotes_generated_raw_data[ACTIVE][duration * 60]
 
     def get_realtime_strike_list(self, ACTIVE, duration):
@@ -1040,7 +1314,7 @@ class Bullex:
         return False
 
     # thank thiagottjv
-    # https://github.com/Lu-Yi-Hsun/bullexAPI/issues/65#issuecomment-513998357
+    # https://github.com/Lu-Yi-Hsun/bullexapi/issues/65#issuecomment-513998357
 
     def buy_digital_spot(self, active, amount, action, duration):
         # Expiration time need to be formatted like this: YYYYMMDDHHII
@@ -1077,7 +1351,7 @@ class Bullex:
         request_id = self.api.place_digital_option(instrument_id, amount)
 
         while self.api.digital_option_placed_id.get(request_id) == None:
-            pass
+            time.sleep(0.002)
         digital_order_id = self.api.digital_option_placed_id.get(request_id)
         if isinstance(digital_order_id, int):
             return True, digital_order_id
@@ -1099,7 +1373,7 @@ class Bullex:
             return None
 
         while self.get_async_order(position_id)["position-changed"] == {}:
-            pass
+            time.sleep(0.002)
         # ___________________/*position*/_________________
         position = self.get_async_order(position_id)["position-changed"]["msg"]
         # doEURUSD201911040628PT1MPSPT
@@ -1197,12 +1471,12 @@ class Bullex:
     def close_digital_option(self, position_id):
         self.api.result = None
         while self.get_async_order(position_id)["position-changed"] == {}:
-            pass
+            time.sleep(0.002)
         position_changed = self.get_async_order(
             position_id)["position-changed"]["msg"]
         self.api.close_digital_option(position_changed["external_id"])
         while self.api.result == None:
-            pass
+            time.sleep(0.002)
         return self.api.result
 
     def check_win_digital(self, buy_order_id, polling_time):
@@ -1219,7 +1493,7 @@ class Bullex:
     def check_win_digital_v2(self, buy_order_id):
 
         while self.get_async_order(buy_order_id)["position-changed"] == {}:
-            pass
+            time.sleep(0.002)
         order_data = self.get_async_order(
             buy_order_id)["position-changed"]["msg"]
         if order_data != None:
@@ -1258,7 +1532,7 @@ class Bullex:
         )
 
         while self.api.buy_order_id == None:
-            pass
+            time.sleep(0.002)
         check, data = self.get_order(self.api.buy_order_id)
         while data["status"] == "pending_new":
             check, data = self.get_order(self.api.buy_order_id)
@@ -1277,7 +1551,7 @@ class Bullex:
         self.api.auto_margin_call_changed_respond = None
         self.api.change_auto_margin_call(ID_Name, ID, auto_margin_call)
         while self.api.auto_margin_call_changed_respond == None:
-            pass
+            time.sleep(0.002)
         if self.api.auto_margin_call_changed_respond["status"] == 2000:
             return True, self.api.auto_margin_call_changed_respond
         else:
@@ -1307,7 +1581,7 @@ class Bullex:
             self.change_auto_margin_call(
                 ID_Name=ID_Name, ID=ID, auto_margin_call=auto_margin_call)
             while self.api.tpsl_changed_respond == None:
-                pass
+                time.sleep(0.002)
             if self.api.tpsl_changed_respond["status"] == 2000:
                 return True, self.api.tpsl_changed_respond["msg"]
             else:
@@ -1329,7 +1603,7 @@ class Bullex:
         self.api.order_data = None
         self.api.get_order(buy_order_id)
         while self.api.order_data == None:
-            pass
+            time.sleep(0.002)
         if self.api.order_data["status"] == 2000:
             return True, self.api.order_data["msg"]
         else:
@@ -1339,7 +1613,7 @@ class Bullex:
         self.api.deferred_orders = None
         self.api.get_pending(instrument_type)
         while self.api.deferred_orders == None:
-            pass
+            time.sleep(0.002)
         if self.api.deferred_orders["status"] == 2000:
             return True, self.api.deferred_orders["msg"]
         else:
@@ -1350,7 +1624,7 @@ class Bullex:
         self.api.positions = None
         self.api.get_positions(instrument_type)
         while self.api.positions == None:
-            pass
+            time.sleep(0.002)
         if self.api.positions["status"] == 2000:
             return True, self.api.positions["msg"]
         else:
@@ -1362,7 +1636,7 @@ class Bullex:
         position_id = order_data["position_id"]
         self.api.get_position(position_id)
         while self.api.position == None:
-            pass
+            time.sleep(0.002)
         if self.api.position["status"] == 2000:
             return True, self.api.position["msg"]
         else:
@@ -1374,25 +1648,25 @@ class Bullex:
         self.api.position = None
         self.api.get_digital_position(position_id)
         while self.api.position == None:
-            pass
+            time.sleep(0.002)
         return self.api.position
 
     def get_digital_position(self, order_id):
         self.api.position = None
         while self.get_async_order(order_id)["position-changed"] == {}:
-            pass
+            time.sleep(0.002)
         position_id = self.get_async_order(
             order_id)["position-changed"]["msg"]["external_id"]
         self.api.get_digital_position(position_id)
         while self.api.position == None:
-            pass
+            time.sleep(0.002)
         return self.api.position
 
     def get_position_history(self, instrument_type):
         self.api.position_history = None
         self.api.get_position_history(instrument_type)
         while self.api.position_history == None:
-            pass
+            time.sleep(0.002)
 
         if self.api.position_history["status"] == 2000:
             return True, self.api.position_history["msg"]
@@ -1405,7 +1679,7 @@ class Bullex:
         self.api.get_position_history_v2(
             instrument_type, limit, offset, start, end)
         while self.api.position_history_v2 == None:
-            pass
+            time.sleep(0.002)
 
         if self.api.position_history_v2["status"] == 2000:
             return True, self.api.position_history_v2["msg"]
@@ -1420,7 +1694,7 @@ class Bullex:
             self.api.get_available_leverages(
                 instrument_type, OP_code.ACTIVES[actives])
         while self.api.available_leverages == None:
-            pass
+            time.sleep(0.002)
         if self.api.available_leverages["status"] == 2000:
             return True, self.api.available_leverages["msg"]
         else:
@@ -1430,7 +1704,7 @@ class Bullex:
         self.api.order_canceled = None
         self.api.cancel_order(buy_order_id)
         while self.api.order_canceled == None:
-            pass
+            time.sleep(0.002)
         if self.api.order_canceled["status"] == 2000:
             return True
         else:
@@ -1442,7 +1716,7 @@ class Bullex:
             self.api.close_position_data = None
             self.api.close_position(data["position_id"])
             while self.api.close_position_data == None:
-                pass
+                time.sleep(0.002)
             if self.api.close_position_data["status"] == 2000:
                 return True
             else:
@@ -1452,11 +1726,11 @@ class Bullex:
 
     def close_position_v2(self, position_id):
         while self.get_async_order(position_id) == None:
-            pass
+            time.sleep(0.002)
         position_changed = self.get_async_order(position_id)
         self.api.close_position(position_changed["id"])
         while self.api.close_position_data == None:
-            pass
+            time.sleep(0.002)
         if self.api.close_position_data["status"] == 2000:
             return True
         else:
@@ -1466,7 +1740,7 @@ class Bullex:
         self.api.overnight_fee = None
         self.api.get_overnight_fee(instrument_type, OP_code.ACTIVES[active])
         while self.api.overnight_fee == None:
-            pass
+            time.sleep(0.002)
         if self.api.overnight_fee["status"] == 2000:
             return True, self.api.overnight_fee["msg"]
         else:
@@ -1529,7 +1803,7 @@ class Bullex:
         self.api.user_profile_client = None
         self.api.Get_User_Profile_Client(user_id)
         while self.api.user_profile_client == None:
-            pass
+            time.sleep(0.002)
 
         return self.api.user_profile_client
 
@@ -1610,15 +1884,59 @@ class Bullex:
         request_id = self.api.place_digital_option_v2(instrument_id, active_id, amount)
 
         while self.api.digital_option_placed_id.get(request_id) is None:
-            pass
+            time.sleep(0.002)
 
         digital_order_id = self.api.digital_option_placed_id.get(request_id)
         if isinstance(digital_order_id, int):
             return True, digital_order_id
         else:
             return False, digital_order_id
-
+        
     def buy_blitz(self, active, price, direction, expiration):
+        self.api.buy_multi_option = {}
+        self.api.buy_successful = None
+
+        if isinstance(active, str):
+            if active not in OP_code.ACTIVES:
+                self.get_ALL_Binary_ACTIVES_OPCODE()
+            active_id = OP_code.ACTIVES[active]
+        else:
+            active_id = active
+
+        profit_percent = self.get_blitz_payout(active)
+        value = None
+
+        for attempt in range(2):
+            request_id = str(randint(0, 10000))
+            self.api.result = None
+            self.api.buy_blitz_option(price, active_id, direction, expiration, profit_percent, value, request_id)
+            start_t = time.time()
+            order_id = None
+            retry_comm = None
+
+            while self.api.result is None or order_id is None:
+                resp = self.api.buy_multi_option.get(request_id)
+                if isinstance(resp, dict):
+                    if "id" in resp and resp["id"] is not None:
+                        order_id = resp["id"]
+                    elif "message" in resp:
+                        act_comm = resp.get("result", {}).get("actual_commission", {}).get("commission")
+                        if act_comm is not None and attempt == 0:
+                            retry_comm = 100 - int(act_comm)
+                            break
+                        return False, resp["message"]
+                if time.time() - start_t >= 5:
+                    return False, None
+                time.sleep(0.01)
+
+            if retry_comm is not None:
+                profit_percent = retry_comm
+                continue
+            return self.api.result, order_id
+
+        return False, None
+
+    def _legacy_buy_blitz(self, active, price, direction, expiration):
         """Buy a blitz option.
         
         :param active: The asset name.
@@ -1678,7 +1996,7 @@ class Bullex:
             # Tenta pegar o payout mais adequado (turbo, binary, etc)
             if active in all_profit:
                 # Priorize turbo, depois binary, depois qualquer outro
-                for key in ["turbo", "binary"]:
+                for key in ["blitz", "turbo", "binary"]:
                     if key in all_profit[active]:
                         return int(all_profit[active][key] * 100)
                 # Se não houver turbo/binary, pega o primeiro disponível
@@ -1687,3 +2005,4 @@ class Bullex:
         except Exception as e:
             logging.warning(f"Não foi possível obter payout para {active}: {e}")
         return 85  # valor padrão se não conseguir
+

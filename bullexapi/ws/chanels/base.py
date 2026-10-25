@@ -8,7 +8,7 @@ class Base(object):
     def __init__(self, api):
         """
         :param api: The instance of :class:`BullexAPI
-            <apibullex.api.BullexAPI>`.
+            <apiBullex.api.BullexAPI>`.
         """
         self.api = api
 

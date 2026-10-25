@@ -1,4 +1,4 @@
-"""Module for Bullex buyV2 websocket chanel."""
+"""Module for bullex buyV2 websocket chanel."""
 from datetime import datetime, timedelta
 import bullexapi.global_value as global_value
 from bullexapi.ws.chanels.base import Base

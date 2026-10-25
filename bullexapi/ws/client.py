@@ -67,8 +67,8 @@ class WebsocketClient(object):
 
     def __init__(self, api):
         """
-        :param api: The instance of :class:`IQOptionAPI
-            <iqoptionapi.api.IQOptionAPI>`.
+        :param api: The instance of :class:`BullexAPI
+            <bullex.api.BullexAPI>`.
         """
         self.api = api
         self.wss = websocket.WebSocketApp(
@@ -107,7 +107,6 @@ class WebsocketClient(object):
 
         message = json.loads(str(message))
 
-
         technical_indicators(self.api, message, self.api_dict_clean)
         time_sync(self.api, message)
         heartbeat(self.api, message)
@@ -135,7 +134,7 @@ class WebsocketClient(object):
         strike_list(self.api, message)
         api_game_betinfo_result(self.api, message)
         traders_mood_changed(self.api, message)
-         # ------for forex&cfd&crypto..
+        # ------for forex&cfd&crypto..
         order_placed_temp(self.api, message)
         order(self.api, message)
         position(self.api, message)
@@ -168,7 +167,7 @@ class WebsocketClient(object):
         global_value.ssl_Mutual_exclusion = False
 
     @staticmethod
-    def on_error(wss, error):  # pylint: disable=unused-argument
+    def on_error(wss, error=None, *args):  # pylint: disable=unused-argument
         """Method to process websocket errors."""
         logger = logging.getLogger(__name__)
         logger.error(error)
@@ -176,17 +175,15 @@ class WebsocketClient(object):
         global_value.check_websocket_if_error = True
 
     @staticmethod
-    def on_open(wss):  # pylint: disable=unused-argument
+    def on_open(wss, *args):  # pylint: disable=unused-argument
         """Method to process websocket open."""
         logger = logging.getLogger(__name__)
         logger.debug("Websocket client connected.")
         global_value.check_websocket_if_connect = 1
 
-    def on_close(self, close_status_code=None, close_msg=None):
-        """Called when websocket connection is closed.
-        
-        :param close_status_code: Status code for close connection.
-        :param close_msg: Message explaining why connection was closed.
-        """
-        logging.debug("WebSocketClient closed connection.")
-        self.connected = False
+    @staticmethod
+    def on_close(wss, *args):  # pylint: disable=unused-argument
+        """Method to process websocket close."""
+        logger = logging.getLogger(__name__)
+        logger.debug("Websocket connection closed.")
+        global_value.check_websocket_if_connect = 0

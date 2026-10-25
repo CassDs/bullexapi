@@ -27,7 +27,7 @@ class Subscribe(Base):
 
 
 class Subscribe_candles(Base):
-    """Class for Bullex candles websocket chanel."""
+    """Class for bullex candles websocket chanel."""
     # pylint: disable=too-few-public-methods
 
     name = "subscribeMessage"

@@ -4,6 +4,7 @@ import bullexapi.global_value as global_value
 from bullexapi.ws.chanels.base import Base
 from random import randint
 
+
 class BuyBlitzOption(Base):
     """Class for bullex blitz option websocket chanel."""
     # pylint: disable=too-few-public-methods
@@ -11,23 +12,12 @@ class BuyBlitzOption(Base):
     name = "sendMessage"
 
     def __call__(self, price, active_id, direction, expiration_size, profit_percent, value=None, request_id=None):
-        """Method to send message to buy blitz option websocket chanel.
-
-        :param price: The buying price.
-        :param active_id: The asset ID.
-        :param direction: The buying direction.
-        :param expiration_size: The expiration time in seconds (typically 3, 5 or 10).
-        :param profit_percent: The profit percentage offered by the broker.
-        :param value: The current asset price value (optional).
-        :param request_id: Custom request ID.
-        """
         if request_id is None:
             request_id = str(randint(0, 10000))
 
-        # Calculate expiration timestamp
-        expired = int(time.time()) + expiration_size
+        server_ts = int(self.api.timesync.server_timestamp) if getattr(self.api.timesync, "server_timestamp", None) else int(time.time())
+        expired = server_ts + int(expiration_size)
 
-        # Build data structure for the request
         data = {
             "name": "binary-options.open-option",
             "version": "2.0",
@@ -40,11 +30,10 @@ class BuyBlitzOption(Base):
                 "refund_value": 0,
                 "price": float(price),
                 "profit_percent": int(profit_percent),
-                "expiration_size": int(expiration_size)
-            }
+                "expiration_size": int(expiration_size),
+            },
         }
 
-        # Include asset value if provided
         if value is not None:
             data["body"]["value"] = value
 

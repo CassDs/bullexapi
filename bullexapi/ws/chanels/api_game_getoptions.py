@@ -1,5 +1,5 @@
 #python
-"""Module for IQ option candles websocket chanel."""
+"""Module for Bullex candles websocket chanel."""
 
 from bullexapi.ws.chanels.base import Base
 import time
