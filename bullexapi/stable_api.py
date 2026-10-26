@@ -419,9 +419,10 @@ class Bullex:
                         self.OPEN_TIME[option][name]["open"] = enabled
                         if name.endswith("-op"):
                             self.OPEN_TIME[option][name[:-3]]["open"] = enabled
-            if not self.OPEN_TIME.get("turbo") and "blitz" in self.OPEN_TIME:
+            if "blitz" in self.OPEN_TIME:
                 for k, v in self.OPEN_TIME["blitz"].items():
-                    self.OPEN_TIME["turbo"][k]["open"] = v.get("open", False)
+                    if k not in self.OPEN_TIME["turbo"] or not self.OPEN_TIME["turbo"][k].get("open"):
+                        self.OPEN_TIME["turbo"][k]["open"] = v.get("open", False)
         return
 
     def _legacy_get_binary_open(self):
@@ -536,10 +537,9 @@ class Bullex:
                         detail[name][opt_type] = act
                         if name.endswith("-op"):
                             detail[name[:-3]][opt_type] = act
-            if not any("turbo" in v for v in detail.values()):
-                for name, v in list(detail.items()):
-                    if "blitz" in v:
-                        detail[name]["turbo"] = v["blitz"]
+            for name, v in list(detail.items()):
+                if "blitz" in v and "turbo" not in v:
+                    detail[name]["turbo"] = v["blitz"]
         return detail
 
     def _legacy_get_binary_option_detail(self):
@@ -573,10 +573,9 @@ class Bullex:
                                     all_profit[name[:-3]][opt_type] = val_p
                         except Exception:
                             pass
-            if not any("turbo" in v for v in all_profit.values()):
-                for name, v in list(all_profit.items()):
-                    if "blitz" in v:
-                        all_profit[name]["turbo"] = v["blitz"]
+            for name, v in list(all_profit.items()):
+                if "blitz" in v and "turbo" not in v:
+                    all_profit[name]["turbo"] = v["blitz"]
         return all_profit
 
     def _legacy_get_all_profit(self):
@@ -1194,15 +1193,13 @@ class Bullex:
                         return self.buy_by_raw_expirations(
                             float(price), ACTIVES, str(ACTION), opt_type, int(exp_sent) + 60
                         )
-                    if "not available" in str(msg_err).lower():
-                        # Fallback automático para corretoras onde Turbo (1m-5m) roda via Blitz (60s-300s) ou Digital
+                    if any(k in str(msg_err).lower() for k in ("not available", "not found", "suspended", "disabled")):
+                        # Fallback automático para corretoras onde Turbo (1m-5m) roda via Blitz (60s-300s/5s) ou Digital
                         exp_sec = int(expirations) * 60 if int(expirations) <= 5 else 60
-                        ok_b, id_b = self.buy_blitz(ACTIVES, price, ACTION, exp_sec)
-                        if ok_b:
-                            return ok_b, id_b
-                        ok_b30, id_b30 = self.buy_blitz(ACTIVES, price, ACTION, 30)
-                        if ok_b30:
-                            return ok_b30, id_b30
+                        for b_sec in (exp_sec, 30, 5):
+                            ok_b, id_b = self.buy_blitz(ACTIVES, price, ACTION, b_sec)
+                            if ok_b:
+                                return ok_b, id_b
                         ok_d, id_d = self.buy_digital_spot_v2(ACTIVES, price, ACTION, int(expirations) if int(expirations) in (1, 5, 15) else 1)
                         if ok_d:
                             return ok_d, id_d
