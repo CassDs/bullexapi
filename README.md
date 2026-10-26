@@ -28,7 +28,10 @@ api = Bullex(email, senha)
 
 ## Métodos Disponíveis
 
-### 1. Conexão e Sessão
+### 1. Conexão, Cadastro e Sessão
+- **`register(country_id=30, first_name="", last_name="")`**  
+  Cadastra uma nova conta diretamente na corretora via API (`/api/v3/register`). Retorna `(True, dados)` ou `(False, erro)`.
+
 - **`connect(sms_code=None)`**  
   Conecta à API. Retorna `(True, None)` em caso de sucesso ou `(False, mensagem)` em caso de falha.
 

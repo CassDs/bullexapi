@@ -155,6 +155,27 @@ class Bullex:
     def connect_2fa(self, sms_code):
         return self.connect(sms_code=sms_code)
 
+    def register(self, country_id=30, first_name="", last_name=""):
+        """Cadastra uma nova conta na corretora via endpoint oficial /api/v3/register.
+        Retorna (True, dict_resposta) em caso de sucesso ou (False, mensagem_erro).
+        """
+        from bullexapi.http.register import Register
+        reg = Register(self.api)
+        resp = reg(
+            self.email,
+            self.password,
+            country_id=country_id,
+            first_name=first_name,
+            last_name=last_name,
+        )
+        try:
+            data = resp.json()
+        except Exception:
+            return False, resp.text
+        if resp.status_code in (200, 201) and data.get("code") == "success":
+            return True, data
+        return False, data.get("message", resp.text)
+
     def check_connect(self):
         # True/False
         # if not connected, sometimes it's None, sometimes its '0', so
